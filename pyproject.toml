@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "agenda-api"
+version = "0.1.0"
+description = ""
+authors = ["Yuto Suzuki <yuto.suzuki.0403@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.6"
+uvicorn = "^0.34.0"
+google-cloud-aiplatform = "^1.75.0"
+pydub = "^0.25.1"
+python-multipart = "^0.0.20"
+jsonref = "^1.1.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

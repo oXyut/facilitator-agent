@@ -1,0 +1,24 @@
+{
+  "editor.defaultFormatter": "charliermarsh.ruff",
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "always",
+    "source.organizeImports": "always"
+  },
+  "python.analysis.inlayHints.variableTypes": true,
+  "python.analysis.inlayHints.functionReturnTypes": true,
+  "python.analysis.diagnosticMode": "workspace",
+  "python.analysis.diagnosticSeverityOverrides": {
+    "reportUnusedImport": "information"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  }
+}
