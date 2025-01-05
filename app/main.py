@@ -1,14 +1,19 @@
-import json
 import os
 
 import fastapi
 import vertexai
 from fastapi import Depends, File, Form, UploadFile
+from fastapi.responses import RedirectResponse
 from file_process import delete_gcs_file, process_webm_file
-from gemini_process import process_agenda, process_transcript
+from gemini_process import process_agenda, process_suggest_actions, process_transcript
 from logging_config import setup_logger
-from models import AgendaModel, TranscriptionModel
-from vertexai.generative_models import GenerativeModel
+from models import (
+    AgendaModel,
+    SuggestActionModel,
+    TemplateAction,
+    TemplateActionsModel,
+    TranscriptionModel,
+)
 
 PROJECT_ID = os.environ.get("PROJECT_ID")
 LOCATION = "us-central1"
@@ -17,23 +22,6 @@ BUCKET_NAME = "audio-playground"
 app = fastapi.FastAPI()
 logger = setup_logger(__name__)
 vertexai.init(project=PROJECT_ID, location=LOCATION)
-
-
-def predict(text: str):
-    model = GenerativeModel("gemini-2.0-flash-exp")
-    response = model.generate_content(text)
-    logger.info(response)
-    return response.to_dict()
-
-
-@app.get("/")
-def read_root():
-    return {"message": "Hello, World!"}
-
-
-@app.post("/predict")
-def predict_text(text: str):
-    return {"message": json.dumps(predict(text), ensure_ascii=False, indent=2)}
 
 
 async def process_audio_files(
@@ -58,6 +46,11 @@ def validate_agenda(json_data: str = Form(...)) -> AgendaModel:
         return agenda
     except Exception as e:
         raise fastapi.HTTPException(500, detail=str(e))
+
+
+@app.get("/", include_in_schema=False)
+def redirect_to_docs():
+    return RedirectResponse(url="/docs")
 
 
 @app.post("/transcript", response_model=TranscriptionModel)
@@ -88,6 +81,19 @@ async def check_agenda(
     agenda: AgendaModel = Depends(validate_agenda),
 ):
     return agenda
+
+
+@app.get("/actions", response_model=TemplateActionsModel)
+def actions():
+    return TemplateActionsModel.resolve()
+
+
+@app.post("/suggest_actions", response_model=SuggestActionModel)
+async def suggest_actions(
+    template_action: TemplateAction,
+    agenda: AgendaModel = Depends(validate_agenda),
+):
+    return process_suggest_actions(template_action, agenda)
 
 
 if __name__ == "__main__":

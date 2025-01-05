@@ -249,3 +249,29 @@ class AgendaModel(CustomBaseModel):
             """.strip()
         ),
     )
+
+
+class TemplateAction(str, Enum):
+    HIGHLIGHT_UNRESOLVED_POINTS = "議論しきれていない部分を指摘する"
+    SUGGEST_RELATED_IDEAS = "関連するアイデアを挙げる"
+    RAISE_OFF_AGENDA_TOPICS = "アジェンダ外で話すべきことを挙げる"
+
+
+class TemplateActionsModel(CustomBaseModel):
+    actions: list[TemplateAction] = Field(
+        [],
+        description="アジェンダの更新におけるアクションのリスト",
+    )
+
+    @classmethod
+    def resolve(cls) -> "TemplateActionsModel":
+        return cls(actions=[action for action in TemplateAction])
+
+
+class SuggestActionModel(CustomBaseModel):
+    template_action: TemplateAction = Field(
+        ..., alias="templateAction", description="アクションのテンプレート"
+    )
+    suggested_action: str = Field(
+        ..., alias="suggestedAction", description="提案されたアクション"
+    )

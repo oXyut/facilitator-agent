@@ -3,9 +3,21 @@ import time
 from typing import List, Type
 
 from logging_config import setup_logger
-from models import AgendaModel, TranscriptionModel
+from models import (
+    AgendaModel,
+    SuggestActionModel,
+    TemplateAction,
+    TemplateActionsModel,
+    TranscriptionModel,
+)
 from pydantic import BaseModel
 from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
+
+
+class GeminiConfig:
+    GEMINI_MODEL_NAME = "gemini-2.0-flash-exp"
+    TEMPERATURE = 0.0
+
 
 logger = setup_logger(__name__)
 
@@ -57,10 +69,10 @@ def process_transcript(audio_gcs_path: str) -> TranscriptionModel:
     )
 
     model = GenerativeModel(
-        model_name="gemini-2.0-flash-exp",
+        model_name=GeminiConfig.GEMINI_MODEL_NAME,
         system_instruction=system_prompt,
         generation_config=GenerationConfig(
-            temperature=0.0,
+            temperature=GeminiConfig.TEMPERATURE,
             response_mime_type="application/json",
             response_schema=TranscriptionModel.to_response_schema(),
         ),
@@ -103,10 +115,10 @@ def process_agenda(
     )
 
     model = GenerativeModel(
-        model_name="gemini-2.0-flash-exp",
+        model_name=GeminiConfig.GEMINI_MODEL_NAME,
         system_instruction=system_prompt,
         generation_config=GenerationConfig(
-            temperature=0.0,
+            temperature=GeminiConfig.TEMPERATURE,
             response_mime_type="application/json",
             response_schema=AgendaModel.to_response_schema(),
         ),
@@ -123,3 +135,61 @@ def process_agenda(
     ]
 
     return __validate(model, parts, AgendaModel, 0, 5)
+
+
+def process_suggest_actions(
+    template_action: TemplateAction, agenda: AgendaModel
+) -> SuggestActionModel:
+    system_prompt = textwrap.dedent(
+        f"""
+        # role
+        あなたは優秀なミーティングのファシリテーターです。
+
+        # task
+        与えられたアジェンダ+議事録に基づき、アクションテンプレートに沿ったアクションを提案してください。
+
+        # input
+        1. アジェンダ+議事録
+        会議に関する情報を含むアジェンダ+議事録です。アクションテンプレートに沿ったアクションを提案するために必要な情報が含まれています。
+        注意：description内の[タスク]は別タスクで使用される情報なので無視してください。
+
+        ```
+        {agenda.to_response_schema_str()}
+        ```
+
+        2. アクションテンプレート
+        下記のいずれかが入力されるので、それに沿ったアクションを提案してください。
+        ```
+        {TemplateActionsModel.resolve().actions}
+        ```
+
+        # output
+        アクションテンプレートに沿ったアクションを提案してください。
+        出力形式は以下のresponse_schemaに沿ってください。
+        
+        ```
+        {SuggestActionModel.to_response_schema_str()}
+        ```
+        """.strip()
+    )
+
+    model = GenerativeModel(
+        model_name=GeminiConfig.GEMINI_MODEL_NAME,
+        system_instruction=system_prompt,
+        generation_config=GenerationConfig(
+            temperature=GeminiConfig.TEMPERATURE,
+            response_mime_type="application/json",
+            response_schema=SuggestActionModel.to_response_schema(),
+        ),
+    )
+
+    parts = [
+        Part.from_text("これがアジェンダ+議事録です。"),
+        Part.from_text(agenda.model_dump_json()),
+        Part.from_text(f"これがアクションテンプレートです：{template_action}"),
+        Part.from_text(
+            "それではアジェンダの更新におけるアクションを提案してください。"
+        ),
+    ]
+
+    return __validate(model, parts, SuggestActionModel, 0, 5)
