@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "agenda-api"
+name = "facilitator-agent"
 version = "0.1.0"
 description = ""
 authors = ["Yuto Suzuki <yuto.suzuki.0403@gmail.com>"]

@@ -1,4 +1,14 @@
-# agenda-api
+# facilitator-agent
+
+会議の音声データとアジェンダを入力として、議事録を自動生成・更新するAPIサービスです。
+
+## 主な機能
+
+- 会議の音声データから文字起こしを生成 (`/transcript`)
+- アジェンダと音声データから議事録を自動生成・更新 (`/agenda`)
+- アジェンダの検証 (`/check_agenda`)
+- アクションテンプレートの取得 (`/actions`)
+- アジェンダに基づくアクションの提案 (`/suggest_actions`)
 
 ## requirements
 - python 3.11
