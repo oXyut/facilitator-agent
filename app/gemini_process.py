@@ -15,6 +15,8 @@ from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
 
 
 class GeminiConfig:
+    """Geminiモデルの設定を保持するクラス"""
+
     GEMINI_MODEL_NAME = "gemini-2.0-flash-exp"
     TEMPERATURE = 0.0
     MAX_RETRIES = 5
@@ -24,6 +26,7 @@ logger = setup_logger(__name__)
 
 
 def exponential_backoff(retries: int):
+    """指数バックオフを行う"""
     time.sleep(2**retries)
 
 
@@ -37,6 +40,22 @@ def _validate(
     retries: int,
     max_retries: int = GeminiConfig.MAX_RETRIES,
 ) -> T:
+    """
+    Geminiモデルからのレスポンスを検証し、指定されたスキーマに変換する。
+
+    Args:
+        model (GenerativeModel): Geminiモデルのインスタンス。
+        parts (List[Part]): モデルへの入力。
+        schema_cls (Type[T]): レスポンスを検証するスキーマクラス。
+        retries (int): 現在のリトライ回数。
+        max_retries (int): 最大リトライ回数。
+
+    Returns:
+        T: 検証済みのレスポンス。
+
+    Raises:
+        Exception: 最大リトライ回数を超えてもレスポンスの検証に失敗した場合。
+    """
     try:
         response = model.generate_content(parts)
         parsed_response = schema_cls.model_validate_json(response.text)
@@ -50,6 +69,15 @@ def _validate(
 
 
 def process_transcript(audio_gcs_path: str) -> TranscriptionModel:
+    """
+    音声ファイルからトランスクリプトを生成する。
+
+    Args:
+        audio_gcs_path (str): 音声ファイルのGCSパス。
+
+    Returns:
+        TranscriptionModel: 生成されたトランスクリプト。
+    """
     system_prompt = textwrap.dedent(
         """
         # role
@@ -93,6 +121,16 @@ def process_transcript(audio_gcs_path: str) -> TranscriptionModel:
 def process_agenda(
     transcription: TranscriptionModel, agenda: AgendaModel
 ) -> AgendaModel:
+    """
+    トランスクリプトとアジェンダに基づいて議事録を生成する。
+
+    Args:
+        transcription (TranscriptionModel): 音声のトランスクリプト。
+        agenda (AgendaModel): 会議のアジェンダ。
+
+    Returns:
+        AgendaModel: 更新されたアジェンダと議事録。
+    """
     system_prompt = textwrap.dedent(
         f"""
         # role
@@ -144,6 +182,16 @@ def process_agenda(
 def process_suggest_actions(
     template_action: TemplateAction, agenda: AgendaModel
 ) -> SuggestActionModel:
+    """
+    アジェンダに基づいてアクションを提案する。
+
+    Args:
+        template_action (TemplateAction): アクションテンプレート。
+        agenda (AgendaModel): 会議のアジェンダ。
+
+    Returns:
+        SuggestActionModel: 提案されたアクション。
+    """
     system_prompt = textwrap.dedent(
         f"""
         # role

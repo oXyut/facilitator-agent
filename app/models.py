@@ -8,6 +8,16 @@ from pydantic import BaseModel, Field
 
 
 def parse_json_schema(schema: dict) -> dict:
+    """
+    JSON Schemaから不要なキーを削除し、参照を解決する。
+
+    Args:
+        schema (dict): JSON Schemaの辞書。
+
+    Returns:
+        dict: 不要なキーが削除され、参照が解決されたJSON Schemaの辞書。
+    """
+
     def __remove_key_recursive(d, key_to_remove):
         if isinstance(d, dict):
             return {
@@ -78,10 +88,22 @@ class CustomBaseModel(BaseModel):
 
     @classmethod
     def to_response_schema(cls) -> dict:
+        """
+        Pydanticモデルからレスポンス用のJSON Schemaを生成する。
+
+        Returns:
+            dict: レスポンス用のJSON Schemaの辞書。
+        """
         return parse_json_schema(cls.model_json_schema())
 
     @classmethod
     def to_response_schema_str(cls) -> str:
+        """
+        Pydanticモデルからレスポンス用のJSON Schemaを文字列として生成する。
+
+        Returns:
+            str: レスポンス用のJSON Schemaの文字列。
+        """
         return json.dumps(cls.to_response_schema(), ensure_ascii=False, indent=2)
 
 
@@ -92,6 +114,12 @@ class CommentsModel(CustomBaseModel):
     text: str = Field(..., description="テキスト")
 
     def clean_text(self) -> "CommentsModel":
+        """
+        テキスト内の不要な空白を削除する。
+
+        Returns:
+            CommentsModel: 空白が削除されたCommentsModelのインスタンス。
+        """
         # remove all spaces
         return CommentsModel(
             start_sec=self.start_sec,
@@ -105,6 +133,12 @@ class TranscriptionModel(CustomBaseModel):
     comments: list[CommentsModel] = Field(..., description="音声データのコメント")
 
     def clean_text(self) -> "TranscriptionModel":
+        """
+        TranscriptionModel内の各コメントのテキストから不要な空白を削除する。
+
+        Returns:
+            TranscriptionModel: 空白が削除されたTranscriptionModelのインスタンス。
+        """
         return TranscriptionModel(
             comments=[comment.clean_text() for comment in self.comments]
         )
@@ -265,6 +299,12 @@ class TemplateActionsModel(CustomBaseModel):
 
     @classmethod
     def resolve(cls) -> "TemplateActionsModel":
+        """
+        利用可能な全てのアクションテンプレートを返す。
+
+        Returns:
+            TemplateActionsModel: 全てのアクションテンプレートを含むTemplateActionsModelのインスタンス。
+        """
         return cls(actions=[action for action in TemplateAction])
 
 

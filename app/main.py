@@ -28,7 +28,19 @@ async def process_audio_files(
     host_audio: UploadFile,
     meet_audio: UploadFile,
 ) -> TranscriptionModel:
-    """Process audio files and return transcription"""
+    """
+    音声ファイルを処理してトランスクリプションを返す。
+
+    Args:
+        host_audio (UploadFile): ホストの音声ファイル。
+        meet_audio (UploadFile): ミーティング参加者の音声ファイル。
+
+    Returns:
+        TranscriptionModel: トランスクリプション結果。
+
+    Raises:
+        HTTPException: 音声ファイルの処理に失敗した場合。
+    """
     gcs_file = await process_webm_file(host_audio, meet_audio, BUCKET_NAME)
     logger.info(f"success to process audio files: {gcs_file.gcs_path}")
     try:
@@ -41,6 +53,18 @@ async def process_audio_files(
 
 
 def validate_agenda(json_data: str = Form(...)) -> AgendaModel:
+    """
+    JSON形式のデータをAgendaModelとして検証する。
+
+    Args:
+        json_data (str): JSON形式の文字列。
+
+    Returns:
+        AgendaModel: 検証済みのAgendaModelインスタンス。
+
+    Raises:
+        HTTPException: JSONの検証に失敗した場合。
+    """
     try:
         agenda = AgendaModel.model_validate_json(json_data)
         return agenda
@@ -50,6 +74,12 @@ def validate_agenda(json_data: str = Form(...)) -> AgendaModel:
 
 @app.get("/", include_in_schema=False)
 def redirect_to_docs():
+    """
+    ルートURLへのアクセスをドキュメントページへリダイレクトする。
+
+    Returns:
+        RedirectResponse: ドキュメントページへのリダイレクトレスポンス。
+    """
     return RedirectResponse(url="/docs")
 
 
@@ -58,6 +88,16 @@ async def transcript(
     host_audio: UploadFile = File(..., media_type="audio/webm"),
     meet_audio: UploadFile = File(..., media_type="audio/webm"),
 ):
+    """
+    音声ファイルからトランスクリプトを生成する。
+
+    Args:
+        host_audio (UploadFile): ホストの音声ファイル。
+        meet_audio (UploadFile): ミーティング参加者の音声ファイル。
+
+    Returns:
+        TranscriptionModel: 生成されたトランスクリプト。
+    """
     return await process_audio_files(host_audio, meet_audio)
 
 
@@ -67,6 +107,20 @@ async def agenda(
     meet_audio: UploadFile = File(..., media_type="audio/webm"),
     agenda: AgendaModel = Depends(validate_agenda),
 ):
+    """
+    音声ファイルとアジェンダに基づいて議事録を生成する。
+
+    Args:
+        host_audio (UploadFile): ホストの音声ファイル。
+        meet_audio (UploadFile): ミーティング参加者の音声ファイル。
+        agenda (AgendaModel): 会議のアジェンダ。
+
+    Returns:
+        AgendaModel: 更新されたアジェンダと議事録。
+
+    Raises:
+        HTTPException: 議事録の生成に失敗した場合。
+    """
     transcription = await process_audio_files(host_audio, meet_audio)
     logger.info("success to get transcription")
     try:
@@ -80,11 +134,26 @@ async def agenda(
 async def check_agenda(
     agenda: AgendaModel = Depends(validate_agenda),
 ):
+    """
+    アジェンダの検証を行う。
+
+    Args:
+        agenda (AgendaModel): 検証するアジェンダ。
+
+    Returns:
+        AgendaModel: 検証されたアジェンダ。
+    """
     return agenda
 
 
 @app.get("/actions", response_model=TemplateActionsModel)
 def actions():
+    """
+    利用可能なアクションテンプレートを取得する。
+
+    Returns:
+        TemplateActionsModel: アクションテンプレートのリスト。
+    """
     return TemplateActionsModel.resolve()
 
 
@@ -93,6 +162,16 @@ async def suggest_actions(
     template_action: TemplateAction,
     agenda: AgendaModel = Depends(validate_agenda),
 ):
+    """
+    アジェンダに基づいてアクションを提案する。
+
+    Args:
+        template_action (TemplateAction): 使用するアクションテンプレート。
+        agenda (AgendaModel): 会議のアジェンダ。
+
+    Returns:
+        SuggestActionModel: 提案されたアクション。
+    """
     return process_suggest_actions(template_action, agenda)
 
 
