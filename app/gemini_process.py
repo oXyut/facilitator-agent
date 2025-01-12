@@ -1,6 +1,6 @@
 import textwrap
 import time
-from typing import List, Type
+from typing import List, Type, TypeVar
 
 from logging_config import setup_logger
 from models import (
@@ -17,6 +17,7 @@ from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
 class GeminiConfig:
     GEMINI_MODEL_NAME = "gemini-2.0-flash-exp"
     TEMPERATURE = 0.0
+    MAX_RETRIES = 5
 
 
 logger = setup_logger(__name__)
@@ -26,13 +27,16 @@ def exponential_backoff(retries: int):
     time.sleep(2**retries)
 
 
-def __validate(
+T = TypeVar("T", bound=BaseModel)
+
+
+def _validate(
     model: GenerativeModel,
     parts: List[Part],
-    schema_cls: Type[BaseModel],
+    schema_cls: Type[T],
     retries: int,
-    max_retries: 5,
-):
+    max_retries: int = GeminiConfig.MAX_RETRIES,
+) -> T:
     try:
         response = model.generate_content(parts)
         parsed_response = schema_cls.model_validate_json(response.text)
@@ -41,7 +45,7 @@ def __validate(
         logger.error(f"{retries}th attempt failed: {e}")
         if retries < max_retries:
             exponential_backoff(retries)
-            return __validate(model, parts, schema_cls, retries + 1, max_retries)
+            return _validate(model, parts, schema_cls, retries + 1, max_retries)
         raise e
 
 
@@ -83,7 +87,7 @@ def process_transcript(audio_gcs_path: str) -> TranscriptionModel:
         Part.from_text("これが文字起こしをしてほしい音声ファイルです。"),
     ]
 
-    return __validate(model, parts, TranscriptionModel, 0, 5).clean_text()
+    return _validate(model, parts, TranscriptionModel, 0, 5).clean_text()
 
 
 def process_agenda(
@@ -134,7 +138,7 @@ def process_agenda(
         ),
     ]
 
-    return __validate(model, parts, AgendaModel, 0, 5)
+    return _validate(model, parts, AgendaModel, 0, GeminiConfig.MAX_RETRIES)
 
 
 def process_suggest_actions(
@@ -192,4 +196,4 @@ def process_suggest_actions(
         ),
     ]
 
-    return __validate(model, parts, SuggestActionModel, 0, 5)
+    return _validate(model, parts, SuggestActionModel, 0, GeminiConfig.MAX_RETRIES)
