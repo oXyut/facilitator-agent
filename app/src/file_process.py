@@ -6,6 +6,8 @@ from fastapi import UploadFile
 from google.cloud import storage
 from pydub import AudioSegment
 
+IS_CLOUD_RUN = os.getenv("K_SERVICE") is not None
+
 
 class GcsFile:
     def __init__(self, bucket_name: str, blob_name: str):
@@ -62,7 +64,7 @@ def convert_webm_to_mp3(webm_path: str) -> str:
 
 
 def mix_audio_files(webm_1_path: str, webm_2_path: str, position: int = 0) -> str:
-    AudioSegment.converter = "/usr/bin/ffmpeg"
+    AudioSegment.converter = "/usr/bin/ffmpeg" if IS_CLOUD_RUN else "ffmpeg"
     audio_1: AudioSegment = AudioSegment.from_file(webm_1_path, format="webm")
     audio_2: AudioSegment = AudioSegment.from_file(webm_2_path, format="webm")
     mixed_audio = audio_1.overlay(audio_2, position=position)

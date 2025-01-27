@@ -50,6 +50,7 @@ async def process_audio_files(
     logger.info(f"success to process audio files: {gcs_file.gcs_path}")
     try:
         transcription = process_transcript(gcs_file.gcs_path)
+        logger.info(f"success to process transcript: {transcription}")
         delete_gcs_file(gcs_file)
         return transcription
     except Exception as e:

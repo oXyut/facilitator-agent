@@ -259,6 +259,24 @@ class AgendaItemModel(CustomBaseModel):
         ),
     )
 
+    def resolve_status(self) -> "AgendaItemModel":
+        """
+        該当アジェンダのgoalsがすべて満たされているかどうかを判断する。
+        1. すべてのAgendaGoalModelのdoneがTrueであれば、statusをCOMPLETEDに更新する。
+        2. 1つ以上のAgendaGoalModelのdoneがFalseであれば、statusをIN_PROGRESSに更新する。
+        3. すべてのAgendaGoalModelのdoneがFalseであれば、statusをNOT_STARTEDに更新する。
+
+        Returns:
+            AgendaItemModel: 更新後のAgendaItemModelのインスタンス。
+        """
+        if all(goal.done for goal in self.goals):
+            self.status = MeetingStatus.COMPLETED
+        elif any(goal.done for goal in self.goals):
+            self.status = MeetingStatus.IN_PROGRESS
+        else:
+            self.status = MeetingStatus.NOT_STARTED
+        return self
+
 
 class AgendaModel(CustomBaseModel):
     items: List[AgendaItemModel] = Field(
@@ -283,6 +301,18 @@ class AgendaModel(CustomBaseModel):
             """.strip()
         ),
     )
+
+    def resolve_status(self) -> "AgendaModel":
+        """
+        該当アジェンダのgoalsがすべて満たされているかどうかを判断する。
+        1. すべてのAgendaItemModelのstatusがCOMPLETEDであれば、statusをCOMPLETEDに更新する。
+        2. 1つ以上のAgendaItemModelのstatusがIN_PROGRESSであれば、statusをIN_PROGRESSに更新する。
+        3. すべてのAgendaItemModelのstatusがNOT_STARTEDであれば、statusをNOT_STARTEDに更新する。
+
+        Returns:
+            AgendaModel: 更新後のAgendaModelのインスタンス。
+        """
+        return AgendaModel(items=[item.resolve_status() for item in self.items])
 
 
 class TemplateAction(str, Enum):
