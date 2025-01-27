@@ -1,18 +1,16 @@
-# select python image
-FROM python:3.11-slim
+# select python image including uv
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-# 必要なシステムツールをインストール
-RUN apt-get -y update && \
-    apt-get -y upgrade && \
-    apt-get install -y ffmpeg
+WORKDIR /app
 
-WORKDIR /root/app
+ENV UV_COMPILE_BYTECODE=1
+ENV UV_LINK_MODE=copy
 
-COPY app/*.py ./
-COPY requirements.txt ./
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-install-project --no-dev
 
-RUN pip install -r requirements.txt
+COPY . .
+RUN uv sync --frozen --no-dev
 
-# run
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
 
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]

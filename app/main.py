@@ -4,10 +4,15 @@ import fastapi
 import vertexai
 from fastapi import Depends, File, Form, UploadFile
 from fastapi.responses import RedirectResponse
-from file_process import delete_gcs_file, process_webm_file
-from gemini_process import process_agenda, process_suggest_actions, process_transcript
-from logging_config import setup_logger
-from models import (
+
+from app.src.file_process import delete_gcs_file, process_webm_file
+from app.src.gemini_process import (
+    process_agenda,
+    process_suggest_actions,
+    process_transcript,
+)
+from app.src.logging_config import setup_logger
+from app.src.models import (
     AgendaModel,
     SuggestActionModel,
     TemplateAction,

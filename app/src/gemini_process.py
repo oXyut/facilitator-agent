@@ -2,16 +2,17 @@ import textwrap
 import time
 from typing import List, Type, TypeVar
 
-from logging_config import setup_logger
-from models import (
+from pydantic import BaseModel
+from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
+
+from app.src.logging_config import setup_logger
+from app.src.models import (
     AgendaModel,
     SuggestActionModel,
     TemplateAction,
     TemplateActionsModel,
     TranscriptionModel,
 )
-from pydantic import BaseModel
-from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
 
 
 class GeminiConfig:
