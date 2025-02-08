@@ -193,7 +193,11 @@ class AgendaGoalModel(CustomBaseModel):
                 - 既にresultが記入済みです。内容をそのままコピーしてください。
             - 与えられたアジェンダの該当resultがFalseだった場合：
                 - 今回のトランスクリプションでも話し合われていなければnullのままにしてください。
-                - 今回のトランスクリプションで話し合われていた場合は、話し合われた内容を記入してください。
+                - 今回のトランスクリプションで話し合われていた場合は、条件が達成された結果何が話し合われたか・決定されたかを記入してください。
+                    - 例
+                        - 達成条件：「次回会議の日程を決める」-> result: 「次回会議は2025/03/01 10:00-11:00に開催する」
+                        - 達成条件：「次回会議の場所を決める」-> result: 「次回会議は先方に往訪して会議する」
+                        - 達成条件：「ご契約について合意を取る」-> result: 「決裁権を持っている部長の鈴木様より合意を得た」
             """.strip()
         ),
     )
@@ -347,4 +351,10 @@ class SuggestActionModel(CustomBaseModel):
     )
     suggested_action: str = Field(
         ..., alias="suggestedAction", description="提案されたアクション"
+    )
+
+
+class HandOverModel(CustomBaseModel):
+    hand_over: str = Field(
+        ..., alias="handOver", description="次回インターバルに引き継ぐべき情報"
     )

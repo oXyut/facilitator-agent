@@ -1,13 +1,17 @@
 import textwrap
 import time
+from datetime import datetime
 from typing import TypeVar
 
+import pytz
 from pydantic import BaseModel
 from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
 
 from app.src.logging_config import setup_logger
 from app.src.models import (
+    AgendaItemModel,
     AgendaModel,
+    HandOverModel,
     SuggestActionModel,
     TemplateAction,
     TemplateActionsModel,
@@ -24,6 +28,21 @@ class GeminiConfig:
 
 
 logger = setup_logger(__name__)
+
+
+def get_current_time(timezone: str = "Asia/Tokyo") -> str:
+    """
+    現在の時刻を取得する。
+    デフォルトで日本時間(JST)を返す。
+
+    Args:
+        timezone (str, optional): タイムゾーン。デフォルトは"Asia/Tokyo"。
+
+    Returns:
+        str: YYYY-MM-DD HH:MM:SS形式の現在時刻。
+    """
+    tz = pytz.timezone(timezone)
+    return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def exponential_backoff(retries: int):
@@ -178,6 +197,119 @@ def process_agenda(
     ]
 
     return _validate(model, parts, AgendaModel, 0, GeminiConfig.MAX_RETRIES)
+
+
+async def process_agenda_by_item(
+    transcription: TranscriptionModel, agenda: AgendaItemModel
+) -> AgendaItemModel:
+    """
+    トランスクリプトとアジェンダに基づいて議事録を生成する。
+    この関数は並列実行可能です。
+
+    Args:
+        transcription (TranscriptionModel): 音声のトランスクリプト。
+        agenda (AgendaItemModel): アジェンダの1項目。
+
+    Returns:
+        AgendaItemModel: 更新されたアジェンダ項目と議事録。
+    """
+    system_prompt = textwrap.dedent(
+        f"""
+        # role
+        あなたは優秀なミーティングの議事録作成者です。
+
+        # task
+        会議中5~10分おきに作成されるトランスクリプトと、事前に作成されたアジェンダ+議事録を参考に、アジェンダに紐づいている議事録を作成してください。
+        このタスクは繰り返し実行されるため、アジェンダ+議事録の入出力の形式は同一である必要があります。
+        また、このタスクは並列で実行されるため、あなたに渡されるのはアジェンダのうちの1項目とそれに紐づいた議事録です。
+
+        # input
+        1. 今回のインターバル分のトランスクリプト
+        ```
+        {transcription.to_response_schema_str()}
+        ```
+
+        2. 事前に作成されたアジェンダ+これまでの議事録
+        ```
+        {agenda.to_response_schema_str()}
+        ```
+
+        # output
+        今回のインターバル分のトランスクリプトを反映したアジェンダ+議事録を作成し、入力されたアジェンダ+議事録を更新してください。
+
+        # note
+        - minutesは、トランスクリプトに基づき作成される議事録です。内容を整理し、マークダウン形式で詳細に記入してください。
+        - 各goalsのresultは、条件が達成された場合のみ記入してください。されていない場合はnullのままにしてください。
+        """
+    )
+
+    model = GenerativeModel(
+        model_name=GeminiConfig.GEMINI_MODEL_NAME,
+        system_instruction=system_prompt,
+        generation_config=GenerationConfig(
+            temperature=GeminiConfig.TEMPERATURE,
+            response_mime_type="application/json",
+            response_schema=AgendaItemModel.to_response_schema(),
+        ),
+    )
+
+    parts = [
+        Part.from_text("これがトランスクリプトです。"),
+        Part.from_text(transcription.model_dump_json()),
+        Part.from_text("これがアジェンダ+議事録の1項目です。"),
+        Part.from_text(agenda.model_dump_json()),
+        Part.from_text(
+            "それではトランスクリプトを反映したアジェンダ+議事録を作成してください。"
+        ),
+    ]
+
+    agenda_item = _validate(model, parts, AgendaItemModel, 0, GeminiConfig.MAX_RETRIES)
+    logger.info(f"processed agenda item: {agenda_item.agenda}")
+    return agenda_item
+
+
+def process_hand_over(
+    transcription: TranscriptionModel,
+    previous_agenda: AgendaModel,
+    post_agenda: AgendaModel,
+) -> HandOverModel:
+    """
+    トランスクリプトと前回のアジェンダ+議事録と今回のアジェンダ+議事録に基づいて、次回インターバルに引き継ぐべき情報を提案する。
+    """
+    system_prompt = textwrap.dedent(
+        """
+        # role
+        あなたは優秀なミーティングのファシリテーターです。
+
+        # task
+        トランスクリプトと前回のアジェンダ+議事録と今回のアジェンダ+議事録に基づいて、次回インターバルに引き継ぐべき情報を提案してください。
+        次回インターバルに引き継ぐべき情報は以下の3つです。
+        - 今回までのインターバルで話し合われた内容
+        - 次回以降のインターバルで話し合われるべき内容
+        """
+    )
+
+    model = GenerativeModel(
+        model_name=GeminiConfig.GEMINI_MODEL_NAME,
+        system_instruction=system_prompt,
+        generation_config=GenerationConfig(
+            temperature=GeminiConfig.TEMPERATURE,
+            response_mime_type="application/json",
+            response_schema=HandOverModel.to_response_schema(),
+        ),
+    )
+
+    parts = [
+        Part.from_text("これがトランスクリプトです。"),
+        Part.from_text(transcription.model_dump_json()),
+        Part.from_text("これが前回のアジェンダ+議事録です。"),
+        Part.from_text(previous_agenda.model_dump_json()),
+        Part.from_text("これが今回のアジェンダ+議事録です。"),
+        Part.from_text(post_agenda.model_dump_json()),
+        Part.from_text("次回インターバルに引き継ぐべき情報を提案してください。"),
+    ]
+
+    return _validate(model, parts, HandOverModel, 0, GeminiConfig.MAX_RETRIES)
 
 
 def process_suggest_actions(

@@ -11,5 +11,6 @@ dependencies = [
     "pydub>=0.25.1",
     "python-dotenv>=1.0.1",
     "python-multipart>=0.0.20",
+    "pytz>=2025.1",
     "uvicorn>=0.34.0",
 ]

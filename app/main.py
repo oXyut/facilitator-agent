@@ -1,14 +1,16 @@
+import asyncio
 import os
 
 import fastapi
 import vertexai
 from dotenv import load_dotenv
-from fastapi import Depends, File, Form, Request, UploadFile
+from fastapi import Depends, File, Form, Header, UploadFile
 from fastapi.responses import RedirectResponse
 
 from app.src.file_process import delete_gcs_file, process_webm_file
 from app.src.gemini_process import (
-    process_agenda,
+    process_agenda_by_item,
+    process_hand_over,
     process_suggest_actions,
     process_transcript,
 )
@@ -27,7 +29,8 @@ PROJECT_ID = os.getenv("PROJECT_ID")
 LOCATION = "us-central1"
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 EXTENSION_ID = os.getenv("EXTENSION_ID")
-EXPECTED_ORIGIN = f"chrome-extension://{EXTENSION_ID}"
+# EXPECTED_ORIGIN = f"chrome-extension://{EXTENSION_ID}"
+API_KEY = os.getenv("API_KEY")
 
 IS_CLOUD_RUN = os.getenv("K_SERVICE") is not None
 
@@ -36,10 +39,16 @@ logger = setup_logger(__name__)
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 
-async def check_origin(request: Request):
-    if IS_CLOUD_RUN:
-        if request.headers.get("origin") != EXPECTED_ORIGIN:
-            raise fastapi.HTTPException(403, detail="Forbidden")
+# async def check_origin(request: Request):
+#     if IS_CLOUD_RUN:
+#         if request.headers.get("origin") != EXPECTED_ORIGIN:
+#             raise fastapi.HTTPException(403, detail="Forbidden")
+
+
+async def check_key(key: str = Header(...)):
+    # headerにkeyが含まれているかどうかを確認する
+    if key != API_KEY:
+        raise fastapi.HTTPException(401, detail="Unauthorized")
 
 
 async def process_audio_files(
@@ -105,7 +114,7 @@ def redirect_to_docs():
 @app.post(
     "/transcript",
     response_model=TranscriptionModel,
-    dependencies=[Depends(check_origin)],
+    dependencies=[Depends(check_key)],
 )
 async def transcript(
     host_audio: UploadFile = File(..., media_type="audio/webm"),
@@ -124,7 +133,7 @@ async def transcript(
     return await process_audio_files(host_audio, meet_audio)
 
 
-@app.post("/agenda", response_model=AgendaModel, dependencies=[Depends(check_origin)])
+@app.post("/agenda", response_model=AgendaModel, dependencies=[Depends(check_key)])
 async def agenda(
     host_audio: UploadFile = File(..., media_type="audio/webm"),
     meet_audio: UploadFile = File(..., media_type="audio/webm"),
@@ -147,14 +156,20 @@ async def agenda(
     transcription = await process_audio_files(host_audio, meet_audio)
     logger.info("success to get transcription")
     try:
-        return process_agenda(transcription, agenda)
+        # 並列処理を実装
+        tasks = [process_agenda_by_item(transcription, item) for item in agenda.items]
+        items = await asyncio.gather(*tasks)
+        new_agenda = AgendaModel(items=items).resolve_status()
+        hand_over = process_hand_over(transcription, agenda, new_agenda)
+        new_agenda.hand_over = hand_over.hand_over
+        return new_agenda
     except Exception as e:
         logger.error(f"failed to process agenda: {e}")
         raise fastapi.HTTPException(500, detail=str(e))
 
 
 @app.post(
-    "/check_agenda", response_model=AgendaModel, dependencies=[Depends(check_origin)]
+    "/check_agenda", response_model=AgendaModel, dependencies=[Depends(check_key)]
 )
 async def check_agenda(
     agenda: AgendaModel = Depends(validate_agenda),
@@ -174,7 +189,7 @@ async def check_agenda(
 @app.get(
     "/actions",
     response_model=TemplateActionsModel,
-    dependencies=[Depends(check_origin)],
+    dependencies=[Depends(check_key)],
 )
 def actions():
     """
@@ -189,7 +204,7 @@ def actions():
 @app.post(
     "/suggest_actions",
     response_model=SuggestActionModel,
-    dependencies=[Depends(check_origin)],
+    dependencies=[Depends(check_key)],
 )
 async def suggest_actions(
     template_action: TemplateAction,
