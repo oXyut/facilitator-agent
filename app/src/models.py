@@ -1,10 +1,68 @@
 import json
 import textwrap
 from enum import Enum
-from typing import List, Optional
+from typing import Optional
 
 import jsonref
 from pydantic import BaseModel, Field
+
+
+def _remove_key_recursive(d, key_to_remove):
+    if isinstance(d, dict):
+        return {
+            k: _remove_key_recursive(v, key_to_remove)
+            for k, v in d.items()
+            if k != key_to_remove
+        }
+    elif isinstance(d, list):
+        return [_remove_key_recursive(item, key_to_remove) for item in d]
+    else:
+        return d
+
+
+def _remove_allOf(schema):
+    if isinstance(schema, dict):
+        # Check if 'allOf' exists and has only one item
+        if "allOf" in schema and len(schema["allOf"]) == 1:
+            # Replace the dict with the first item in 'allOf'
+            schema.update(schema.pop("allOf")[0])
+
+        # Recursively process all properties
+        for key, value in schema.items():
+            _remove_allOf(value)
+
+    elif isinstance(schema, list):
+        # Process each item in the list
+        for item in schema:
+            _remove_allOf(item)
+
+    return schema
+
+
+def _remove_anyOf(schema):
+    if isinstance(schema, dict):
+        if "anyOf" in schema:
+            anyOf_items = schema.pop("anyOf")
+            schema.update(anyOf_items[0])
+        for key, value in schema.items():
+            _remove_anyOf(value)
+    elif isinstance(schema, list):
+        for item in schema:
+            _remove_anyOf(item)
+
+    return schema
+
+
+def _remove_pattern_properties(schema):
+    if isinstance(schema, dict):
+        if "pattern" in schema:
+            schema.pop("pattern")
+        for key, value in schema.items():
+            _remove_pattern_properties(value)
+    elif isinstance(schema, list):
+        for item in schema:
+            _remove_pattern_properties(item)
+    return schema
 
 
 def parse_json_schema(schema: dict) -> dict:
@@ -17,67 +75,12 @@ def parse_json_schema(schema: dict) -> dict:
     Returns:
         dict: 不要なキーが削除され、参照が解決されたJSON Schemaの辞書。
     """
-
-    def __remove_key_recursive(d, key_to_remove):
-        if isinstance(d, dict):
-            return {
-                k: __remove_key_recursive(v, key_to_remove)
-                for k, v in d.items()
-                if k != key_to_remove
-            }
-        elif isinstance(d, list):
-            return [__remove_key_recursive(item, key_to_remove) for item in d]
-        else:
-            return d
-
-    def __remove_allOf(schema):
-        if isinstance(schema, dict):
-            # Check if 'allOf' exists and has only one item
-            if "allOf" in schema and len(schema["allOf"]) == 1:
-                # Replace the dict with the first item in 'allOf'
-                schema.update(schema.pop("allOf")[0])
-
-            # Recursively process all properties
-            for key, value in schema.items():
-                __remove_allOf(value)
-
-        elif isinstance(schema, list):
-            # Process each item in the list
-            for item in schema:
-                __remove_allOf(item)
-
-        return schema
-
-    def __remove_anyOf(schema):
-        if isinstance(schema, dict):
-            if "anyOf" in schema:
-                anyOf_items = schema.pop("anyOf")
-                schema.update(anyOf_items[0])
-            for key, value in schema.items():
-                __remove_anyOf(value)
-        elif isinstance(schema, list):
-            for item in schema:
-                __remove_anyOf(item)
-
-        return schema
-
-    def __remove_pattern_properties(schema):
-        if isinstance(schema, dict):
-            if "pattern" in schema:
-                schema.pop("pattern")
-            for key, value in schema.items():
-                __remove_pattern_properties(value)
-        elif isinstance(schema, list):
-            for item in schema:
-                __remove_pattern_properties(item)
-        return schema
-
     schema = jsonref.JsonRef.replace_refs(schema)
     # titleの削除は必須ではないがresponse_schemaのexampleにないため削除
-    schema = __remove_key_recursive(schema, "title")
-    schema = __remove_allOf(schema)
-    schema = __remove_anyOf(schema)
-    schema = __remove_pattern_properties(schema)
+    schema = _remove_key_recursive(schema, "title")
+    schema = _remove_allOf(schema)
+    schema = _remove_anyOf(schema)
+    schema = _remove_pattern_properties(schema)
     schema = {k: v for k, v in schema.items() if k != "$defs"}
     return schema
 
@@ -279,7 +282,7 @@ class AgendaItemModel(CustomBaseModel):
 
 
 class AgendaModel(CustomBaseModel):
-    items: List[AgendaItemModel] = Field(
+    items: list[AgendaItemModel] = Field(
         [],
         description=textwrap.dedent(
             """

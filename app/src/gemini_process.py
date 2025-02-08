@@ -1,6 +1,6 @@
 import textwrap
 import time
-from typing import List, Type, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel
 from vertexai.generative_models import GenerationConfig, GenerativeModel, Part
@@ -18,8 +18,8 @@ from app.src.models import (
 class GeminiConfig:
     """Geminiモデルの設定を保持するクラス"""
 
-    GEMINI_MODEL_NAME = "gemini-2.0-flash-exp"
-    TEMPERATURE = 0.0
+    GEMINI_MODEL_NAME = "gemini-2.0-flash-001"
+    TEMPERATURE = 0.5
     MAX_RETRIES = 5
 
 
@@ -36,8 +36,8 @@ T = TypeVar("T", bound=BaseModel)
 
 def _validate(
     model: GenerativeModel,
-    parts: List[Part],
-    schema_cls: Type[T],
+    parts: list[Part],
+    schema_cls: type[T],
     retries: int,
     max_retries: int = GeminiConfig.MAX_RETRIES,
 ) -> T:
@@ -46,7 +46,7 @@ def _validate(
 
     Args:
         model (GenerativeModel): Geminiモデルのインスタンス。
-        parts (List[Part]): モデルへの入力。
+        parts (list[Part]): モデルへの入力。
         schema_cls (Type[T]): レスポンスを検証するスキーマクラス。
         retries (int): 現在のリトライ回数。
         max_retries (int): 最大リトライ回数。
