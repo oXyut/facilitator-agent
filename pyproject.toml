@@ -9,6 +9,7 @@ dependencies = [
     "google-cloud-aiplatform>=1.76.0",
     "jsonref>=1.1.0",
     "pydub>=0.25.1",
+    "python-dotenv>=1.0.1",
     "python-multipart>=0.0.20",
     "uvicorn>=0.34.0",
 ]

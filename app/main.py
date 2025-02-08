@@ -2,7 +2,8 @@ import os
 
 import fastapi
 import vertexai
-from fastapi import Depends, File, Form, UploadFile
+from dotenv import load_dotenv
+from fastapi import Depends, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
 from app.src.file_process import delete_gcs_file, process_webm_file
@@ -20,13 +21,25 @@ from app.src.models import (
     TranscriptionModel,
 )
 
-PROJECT_ID = os.environ.get("PROJECT_ID")
+load_dotenv()
+
+PROJECT_ID = os.getenv("PROJECT_ID")
 LOCATION = "us-central1"
-BUCKET_NAME = "audio-playground"
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+EXTENSION_ID = os.getenv("EXTENSION_ID")
+EXPECTED_ORIGIN = f"chrome-extension://{EXTENSION_ID}"
+
+IS_CLOUD_RUN = os.getenv("K_SERVICE") is not None
 
 app = fastapi.FastAPI()
 logger = setup_logger(__name__)
 vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+
+async def check_origin(request: Request):
+    if IS_CLOUD_RUN:
+        if request.headers.get("origin") != EXPECTED_ORIGIN:
+            raise fastapi.HTTPException(403, detail="Forbidden")
 
 
 async def process_audio_files(
@@ -89,7 +102,11 @@ def redirect_to_docs():
     return RedirectResponse(url="/docs")
 
 
-@app.post("/transcript", response_model=TranscriptionModel)
+@app.post(
+    "/transcript",
+    response_model=TranscriptionModel,
+    dependencies=[Depends(check_origin)],
+)
 async def transcript(
     host_audio: UploadFile = File(..., media_type="audio/webm"),
     meet_audio: UploadFile = File(..., media_type="audio/webm"),
@@ -107,7 +124,7 @@ async def transcript(
     return await process_audio_files(host_audio, meet_audio)
 
 
-@app.post("/agenda", response_model=AgendaModel)
+@app.post("/agenda", response_model=AgendaModel, dependencies=[Depends(check_origin)])
 async def agenda(
     host_audio: UploadFile = File(..., media_type="audio/webm"),
     meet_audio: UploadFile = File(..., media_type="audio/webm"),
@@ -136,7 +153,9 @@ async def agenda(
         raise fastapi.HTTPException(500, detail=str(e))
 
 
-@app.post("/check_agenda", response_model=AgendaModel)
+@app.post(
+    "/check_agenda", response_model=AgendaModel, dependencies=[Depends(check_origin)]
+)
 async def check_agenda(
     agenda: AgendaModel = Depends(validate_agenda),
 ):
@@ -152,7 +171,11 @@ async def check_agenda(
     return agenda
 
 
-@app.get("/actions", response_model=TemplateActionsModel)
+@app.get(
+    "/actions",
+    response_model=TemplateActionsModel,
+    dependencies=[Depends(check_origin)],
+)
 def actions():
     """
     利用可能なアクションテンプレートを取得する。
@@ -163,7 +186,11 @@ def actions():
     return TemplateActionsModel.resolve()
 
 
-@app.post("/suggest_actions", response_model=SuggestActionModel)
+@app.post(
+    "/suggest_actions",
+    response_model=SuggestActionModel,
+    dependencies=[Depends(check_origin)],
+)
 async def suggest_actions(
     template_action: TemplateAction,
     agenda: AgendaModel = Depends(validate_agenda),
